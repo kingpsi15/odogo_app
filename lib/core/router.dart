@@ -205,6 +205,11 @@ final routerProvider = Provider<GoRouter>((ref) {
         final user = authState.user;
         final isDriver = user.role == UserRole.driver;
 
+        // Keep user on OTP briefly so OTP screen can show role-mismatch snackbar.
+        if (path == '/otp') {
+          return null;
+        }
+
         // Check if a driver still needs to upload documents (e.g., vehicle data is null)
         final needsDocs = isDriver && user.vehicle == null;
 

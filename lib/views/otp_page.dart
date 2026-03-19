@@ -264,6 +264,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../controllers/auth_controller.dart';
+import '../models/enums.dart';
 
 class OtpPage extends ConsumerStatefulWidget {
   final bool isDriver;
@@ -295,6 +296,43 @@ class _OtpPageState extends ConsumerState<OtpPage> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(message), backgroundColor: Colors.red),
     );
+  }
+
+  Future<void> _handleAuthenticated(AuthAuthenticated authState) async {
+    final user = authState.user;
+    final actualIsDriver = user.role == UserRole.driver;
+    final selectedRoleLabel = widget.isDriver ? 'driver' : 'commuter';
+    final actualRoleLabel = actualIsDriver ? 'driver' : 'commuter';
+
+    if (widget.isDriver != actualIsDriver) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'This email is registered as a $actualRoleLabel account. Logging you in as $actualRoleLabel.',
+          ),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      // Small delay so the user can read the role mismatch message.
+      await Future.delayed(const Duration(milliseconds: 900));
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Signed in as $selectedRoleLabel.'),
+          backgroundColor: const Color(0xFF66D2A3),
+        ),
+      );
+      await Future.delayed(const Duration(milliseconds: 400));
+    }
+
+    if (!mounted) return;
+    final needsDocs = actualIsDriver && user.vehicle == null;
+    if (needsDocs) {
+      context.go('/driver-docs');
+      return;
+    }
+
+    context.go(actualIsDriver ? '/driver-home' : '/commuter-home');
   }
 
   Future<void> _handleContinue() async {
@@ -347,12 +385,9 @@ class _OtpPageState extends ConsumerState<OtpPage> {
           'email': widget.email,
         },
       );
+    } else if (authState is AuthAuthenticated) {
+      await _handleAuthenticated(authState);
     }
-    // Notice what's missing?
-    // If it's AuthAuthenticated, WE DO NOTHING!
-    // Why? Because router.dart is watching the state. The split second the
-    // state becomes AuthAuthenticated, the router magically swoops in and
-    // automatically transports the user to '/commuter-home' or '/driver-home'.
   }
 
   Future<void> _resendLink() async {

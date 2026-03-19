@@ -11,6 +11,7 @@ import '../views/sign_up_page.dart';
 import '../views/commuter_home.dart';
 import '../views/driver_home_screen.dart';
 import '../views/driver_document_upload_screen.dart';
+import '../views/driver_active_pickup_screen.dart';
 import '../views/account_not_found_screen.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
@@ -65,6 +66,9 @@ final routerProvider = Provider<GoRouter>((ref) {
         final isDriver = user.role == UserRole.driver;
 
         if (path.startsWith('/otp')) return null;
+        
+        // Allow drivers to access active-pickup screen regardless of mode
+        if (path.startsWith('/active-pickup')) return null;
 
         final needsDocs = isDriver && user.vehicle == null;
         if (needsDocs) {
@@ -144,6 +148,13 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/driver-docs',
         builder: (context, state) => const DriverDocumentUploadScreen(),
+      ),
+      GoRoute(
+        path: '/active-pickup',
+        builder: (context, state) {
+          final tripID = state.extra as String? ?? '';
+          return DriverActivePickupScreen(tripID: tripID);
+        },
       ),
     ],
   );

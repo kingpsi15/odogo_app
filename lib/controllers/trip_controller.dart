@@ -138,23 +138,34 @@ class TripController extends Notifier<AsyncValue<void>> {
   ) async {
     state = const AsyncValue.loading();
     try {
+      print('DEBUG: acceptRide called for tripID=$tripID, driverID=$driverID');
+      
       // 1. Assign driver and confirm trip
       await _repository.updateTripData(tripID, {
         'status': TripStatus.confirmed.name,
         'driverName': driverName,
         'driverID': driverID,
       });
+      print('DEBUG: Trip updated to confirmed');
 
       // Set the driver's mode to busy
       await ref.read(userRepositoryProvider).updateUser(driverID, {
         'mode': DriverMode.busy.name,
       });
+      print('DEBUG: Driver mode set to busy');
 
       // Refresh local user state so the pendingTripsProvider instantly cuts off
       await ref.read(authControllerProvider.notifier).refreshUser();
+      print('DEBUG: User refreshed');
+
+      // Verify the mode was actually set
+      final updatedUser = ref.read(currentUserProvider);
+      print('DEBUG: Updated user mode: ${updatedUser?.mode}');
 
       state = const AsyncValue.data(null);
     } catch (e, st) {
+      print('DEBUG: acceptRide error: $e');
+      print('DEBUG: Stack trace: $st');
       state = AsyncValue.error(e, st);
     }
   }

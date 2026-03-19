@@ -237,7 +237,9 @@ class _TripConfirmationScreenState extends State<TripConfirmationScreen> {
                     onPressed: () {
                       Navigator.pushReplacement(
                         context,
-                        MaterialPageRoute(builder: (context) => const WaitingForDriverScreen()),
+                        MaterialPageRoute(
+                          builder: (context) => WaitingForDriverScreen(dropoffPoint: widget.dropoffPoint),
+                        ),
                       );
                     },
                     style: ElevatedButton.styleFrom(

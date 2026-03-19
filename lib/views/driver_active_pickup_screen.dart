@@ -37,11 +37,18 @@ class _DriverActivePickupScreenState extends State<DriverActivePickupScreen> {
   // Focus nodes for the 4 PIN boxes
   final List<FocusNode> _focusNodes = List.generate(4, (index) => FocusNode());
   final List<TextEditingController> _controllers = List.generate(4, (index) => TextEditingController());
+  Timer? _autoAdvanceTimer;
 
   @override
   void initState() {
     super.initState();
     _initializeTripMap();
+    // Auto-advance to trip screen after 5 seconds for testing
+    _autoAdvanceTimer = Timer(const Duration(seconds: 5), () {
+      if (mounted) {
+        _verifyPinAndStartTrip();
+      }
+    });
   }
 
   Future<void> _initializeTripMap() async {
@@ -275,6 +282,7 @@ class _DriverActivePickupScreenState extends State<DriverActivePickupScreen> {
 
   @override
   void dispose() {
+    _autoAdvanceTimer?.cancel();
     _driverLocationSubscription?.cancel();
     for (var node in _focusNodes) { node.dispose(); }
     for (var controller in _controllers) { controller.dispose(); }

@@ -4,7 +4,9 @@ import 'package:latlong2/latlong.dart';
 import 'ride_confirmed_screen.dart';
 
 class WaitingForDriverScreen extends StatefulWidget {
-  const WaitingForDriverScreen({super.key});
+  final LatLng? dropoffPoint;
+
+  const WaitingForDriverScreen({super.key, this.dropoffPoint});
 
   @override
   State<WaitingForDriverScreen> createState() => _WaitingForDriverScreenState();
@@ -19,7 +21,9 @@ class _WaitingForDriverScreenState extends State<WaitingForDriverScreen> {
       if (mounted) {
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (context) => const RideConfirmedScreen()),
+          MaterialPageRoute(
+            builder: (context) => RideConfirmedScreen(dropoffPoint: widget.dropoffPoint),
+          ),
         );
       }
     });

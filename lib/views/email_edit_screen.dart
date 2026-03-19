@@ -26,8 +26,8 @@ class _EmailEditScreenState extends ConsumerState<EmailEditScreen> {
 
     setState(() {
       // Use the exact same emailID property from your SwitchAccountScreen logic
-      if (activeUser != null && activeUser.emailID != null && activeUser.emailID!.isNotEmpty) {
-        _controller.text = activeUser.emailID!;
+      if (activeUser != null && activeUser.emailID.isNotEmpty) {
+        _controller.text = activeUser.emailID;
       } else {
         _controller.text = "No email linked";
       }

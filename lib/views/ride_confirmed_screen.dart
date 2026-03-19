@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -6,9 +7,12 @@ import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
 import 'commuter_cancel_confirmation_screen.dart';
+import 'pickup_confirmed_screen.dart';
 
 class RideConfirmedScreen extends StatefulWidget {
-  const RideConfirmedScreen({super.key});
+  final LatLng? dropoffPoint;
+
+  const RideConfirmedScreen({super.key, this.dropoffPoint});
 
   @override
   State<RideConfirmedScreen> createState() => _RideConfirmedScreenState();
@@ -17,15 +21,30 @@ class RideConfirmedScreen extends StatefulWidget {
 class _RideConfirmedScreenState extends State<RideConfirmedScreen> {
   static const LatLng _fallbackCurrentLocation = LatLng(26.5123, 80.2329);
   static const LatLng _driverLocation = LatLng(26.5150, 80.2300);
+  static const LatLng _fallbackDropoffLocation = LatLng(26.5170, 80.2310);
   static const double _avgDriverSpeedMetersPerSecond = 4.5; // ~16.2 km/h
   static const double _minFitDistanceMeters = 5;
   LatLng _currentLocation = _fallbackCurrentLocation;
   List<LatLng>? _routePoints;
+  Timer? _autoAdvanceTimer;
+  late LatLng _dropoffLocation;
 
   @override
   void initState() {
     super.initState();
+    _dropoffLocation = widget.dropoffPoint ?? _fallbackDropoffLocation;
     _loadCurrentLocationAndRoute();
+    // Auto-advance to pickup confirmed screen after 5 seconds (simulates driver entering OTP)
+    _autoAdvanceTimer = Timer(const Duration(seconds: 5), () {
+      if (mounted) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) => PickupConfirmedScreen(dropoffPoint: _dropoffLocation),
+          ),
+        );
+      }
+    });
   }
 
   Future<void> _loadCurrentLocationAndRoute() async {
@@ -163,6 +182,12 @@ class _RideConfirmedScreenState extends State<RideConfirmedScreen> {
     MaterialPageRoute(builder: (context) => const CommuterCancelConfirmationScreen()),
   );
 }
+
+  @override
+  void dispose() {
+    _autoAdvanceTimer?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {

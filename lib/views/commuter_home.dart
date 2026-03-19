@@ -3,15 +3,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart'; // Added Riverpod
-import '../controllers/auth_controller.dart'; // To fetch the user profile
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../controllers/auth_controller.dart';
 import '../data/iitk_dropoff_locations.dart';
 import 'bookings_screen.dart';
 import 'profile_screen.dart';
 import 'trip_confirmation_screen.dart';
 import 'schedule_booking_screen.dart';
 
-// Upgraded to ConsumerStatefulWidget
 class CommuterHomeScreen extends ConsumerStatefulWidget {
   const CommuterHomeScreen({super.key});
 
@@ -57,7 +56,6 @@ class _CommuterHomeScreenState extends ConsumerState<CommuterHomeScreen> {
 // ============================================================================
 // SECTION: The Home (Map) Tab UI
 // ============================================================================
-// Upgraded to ConsumerStatefulWidget
 class _MapHomeView extends ConsumerStatefulWidget {
   const _MapHomeView();
 
@@ -108,7 +106,6 @@ class _MapHomeViewState extends ConsumerState<_MapHomeView> with WidgetsBindingO
     }
   }
 
-  // --- LOCATION PERMISSION GAUNTLET ---
   Future<void> _enforceLocationPermission() async {
     bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
     
@@ -245,6 +242,19 @@ class _MapHomeViewState extends ConsumerState<_MapHomeView> with WidgetsBindingO
     return _currentLocation; 
   }
 
+  DropoffLocation? _resolveDropoffLocation(String query) {
+    final normalized = query.trim().toLowerCase();
+    if (normalized.isEmpty) return null;
+
+    for (final location in iitkDropoffLocations) {
+      if (location.name.toLowerCase() == normalized) return location;
+    }
+    for (final location in iitkDropoffLocations) {
+      if (location.matches(normalized)) return location;
+    }
+    return null;
+  }
+
   String _buildPickupLabel() {
     if (_customPickupName != null) return _customPickupName!;
     if (!_useCurrentLocationAsPickup && _selectedPickupLocation != null) return _selectedPickupLocation!.name;
@@ -273,7 +283,6 @@ class _MapHomeViewState extends ConsumerState<_MapHomeView> with WidgetsBindingO
   Future<void> _openPickupSelector() async {
     String localSearchText = '';
     
-    // 1. Fetch the user's saved addresses from the database state
     final user = ref.read(currentUserProvider);
     final homeAddress = (user?.roomNo != null && user!.roomNo!.isNotEmpty) ? user.roomNo : null;
     final workAddress = (user?.savedLocations != null && user!.savedLocations!.isNotEmpty && user.savedLocations![0].isNotEmpty) 
@@ -295,7 +304,6 @@ class _MapHomeViewState extends ConsumerState<_MapHomeView> with WidgetsBindingO
                   loc.matches(localSearchText) 
                 ).toList();
 
-            // Smart logic to show Home/Work tiles if they match the search text (or if search is empty)
             bool showHome = homeAddress != null && (localSearchText.isEmpty || 'home'.contains(localSearchText.toLowerCase()) || homeAddress.toLowerCase().contains(localSearchText.toLowerCase()));
             bool showWork = workAddress != null && (localSearchText.isEmpty || 'work'.contains(localSearchText.toLowerCase()) || workAddress.toLowerCase().contains(localSearchText.toLowerCase()));
 
@@ -340,7 +348,6 @@ class _MapHomeViewState extends ConsumerState<_MapHomeView> with WidgetsBindingO
                           onTap: () => Navigator.pop(sheetContext, null),
                         ),
 
-                        // --- THE DYNAMIC HOME & WORK TILES ---
                         if (showHome)
                           ListTile(
                             leading: const Icon(Icons.home, color: Colors.black54),
@@ -391,6 +398,7 @@ class _MapHomeViewState extends ConsumerState<_MapHomeView> with WidgetsBindingO
 
     if (!mounted) return;
     
+    // ---> FIX: Resolve the Home/Work string into a real GPS coordinate for Pickup <---
     setState(() {
       if (selected == null) {
         _useCurrentLocationAsPickup = true;
@@ -398,8 +406,17 @@ class _MapHomeViewState extends ConsumerState<_MapHomeView> with WidgetsBindingO
         _customPickupName = null;
       } else if (selected is String) {
         _useCurrentLocationAsPickup = false;
-        _selectedPickupLocation = null;
-        _customPickupName = selected; 
+        
+        // Try to match the Home/Work string to actual IITK coordinates
+        final matchedLoc = _resolveDropoffLocation(selected);
+        if (matchedLoc != null) {
+          _selectedPickupLocation = matchedLoc;
+          _customPickupName = null;
+        } else {
+          // If it really doesn't exist, treat it as custom text
+          _selectedPickupLocation = null;
+          _customPickupName = selected; 
+        }
       } else if (selected is DropoffLocation) {
         _useCurrentLocationAsPickup = false;
         _selectedPickupLocation = selected;
@@ -412,7 +429,6 @@ class _MapHomeViewState extends ConsumerState<_MapHomeView> with WidgetsBindingO
   Future<void> _openDropoffSelector() async {
     String localSearchText = '';
     
-    // 1. Fetch the user's saved addresses from the database state
     final user = ref.read(currentUserProvider);
     final homeAddress = (user?.roomNo != null && user!.roomNo!.isNotEmpty) ? user.roomNo : null;
     final workAddress = (user?.savedLocations != null && user!.savedLocations!.isNotEmpty && user.savedLocations![0].isNotEmpty) 
@@ -434,7 +450,6 @@ class _MapHomeViewState extends ConsumerState<_MapHomeView> with WidgetsBindingO
                   loc.matches(localSearchText) 
                 ).toList();
 
-            // Smart logic to show Home/Work tiles
             bool showHome = homeAddress != null && (localSearchText.isEmpty || 'home'.contains(localSearchText.toLowerCase()) || homeAddress.toLowerCase().contains(localSearchText.toLowerCase()));
             bool showWork = workAddress != null && (localSearchText.isEmpty || 'work'.contains(localSearchText.toLowerCase()) || workAddress.toLowerCase().contains(localSearchText.toLowerCase()));
 
@@ -473,7 +488,6 @@ class _MapHomeViewState extends ConsumerState<_MapHomeView> with WidgetsBindingO
                           ),
                         ),
 
-                        // --- THE DYNAMIC HOME & WORK TILES ---
                         if (showHome)
                           ListTile(
                             leading: const Icon(Icons.home, color: Colors.black54),
@@ -524,8 +538,14 @@ class _MapHomeViewState extends ConsumerState<_MapHomeView> with WidgetsBindingO
 
     if (!mounted || selected == null) return;
     
+    // ---> FIX: Resolve the Home/Work string into a real GPS coordinate for Dropoff <---
     if (selected is String) {
-      _openTripConfirmation(destinationName: selected, dropoff: null);
+      final matchedDropoff = _resolveDropoffLocation(selected);
+      
+      _openTripConfirmation(
+        destinationName: matchedDropoff?.name ?? selected, // Uses the official name if found
+        dropoff: matchedDropoff // Passes the coordinates so the map draws the line!
+      );
     } else if (selected is DropoffLocation) {
       _openTripConfirmation(destinationName: selected.name, dropoff: selected);
     }

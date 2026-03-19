@@ -292,7 +292,7 @@
 //     );
 //   }
 // }
-
+import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -302,6 +302,7 @@ import '../controllers/auth_controller.dart';
 import '../controllers/trip_controller.dart';
 import '../models/enums.dart';
 import '../models/trip_model.dart';
+import '../data/iitk_dropoff_locations.dart'; // Added to access the campus locations
 
 class ScheduleBookingScreen extends ConsumerStatefulWidget {
   const ScheduleBookingScreen({super.key});
@@ -319,24 +320,19 @@ class _ScheduleBookingScreenState extends ConsumerState<ScheduleBookingScreen> {
   final TextEditingController _pickupController = TextEditingController();
   final TextEditingController _dropoffController = TextEditingController();
 
-  // Functional Date Picker (Styled to OdoGo Green)
   Future<void> _pickDate() async {
     final DateTime? picked = await showDatePicker(
       context: context,
-      initialDate: DateTime.now().add(
-        const Duration(days: 1),
-      ), // Default to tomorrow
-      firstDate: DateTime.now(), // Can't schedule in the past
-      lastDate: DateTime.now().add(
-        const Duration(days: 30),
-      ), // Up to 30 days in advance
+      initialDate: DateTime.now().add(const Duration(days: 1)), 
+      firstDate: DateTime.now(), 
+      lastDate: DateTime.now().add(const Duration(days: 30)), 
       builder: (context, child) {
         return Theme(
           data: Theme.of(context).copyWith(
             colorScheme: const ColorScheme.light(
-              primary: Color(0xFF66D2A3), // Header background color
-              onPrimary: Colors.black, // Header text color
-              onSurface: Colors.black, // Body text color
+              primary: Color(0xFF66D2A3), 
+              onPrimary: Colors.black, 
+              onSurface: Colors.black, 
             ),
           ),
           child: child!,
@@ -350,7 +346,6 @@ class _ScheduleBookingScreenState extends ConsumerState<ScheduleBookingScreen> {
     }
   }
 
-  // Functional Time Picker (Styled to OdoGo Green)
   Future<void> _pickTime() async {
     final TimeOfDay? picked = await showTimePicker(
       context: context,
@@ -375,7 +370,147 @@ class _ScheduleBookingScreenState extends ConsumerState<ScheduleBookingScreen> {
     }
   }
 
-  // Backend-wired confirmation method
+  // --- UNIFIED BOTTOM SHEET SELECTOR ---
+  Future<void> _openLocationSelector({required bool isPickup}) async {
+    String localSearchText = '';
+    
+    // Fetch the user's saved addresses
+    final user = ref.read(currentUserProvider);
+    final homeAddress = (user?.roomNo != null && user!.roomNo!.isNotEmpty) ? user.roomNo : null;
+    final workAddress = (user?.savedLocations != null && user!.savedLocations!.isNotEmpty && user.savedLocations![0].isNotEmpty) 
+        ? user.savedLocations![0] 
+        : null;
+        
+    final selected = await showModalBottomSheet<dynamic>(
+      context: context,
+      isScrollControlled: true, 
+      backgroundColor: Colors.transparent, // MAGIC TRICK: Transparent base
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (BuildContext context, StateSetter setSheetState) {
+            
+            List<DropoffLocation> sheetFiltered = localSearchText.isEmpty 
+              ? iitkDropoffLocations 
+              : iitkDropoffLocations.where((loc) => 
+                  loc.name.toLowerCase().contains(localSearchText.toLowerCase()) || 
+                  loc.matches(localSearchText) 
+                ).toList();
+
+            // Smart logic to show Home/Work tiles
+            bool showHome = homeAddress != null && (localSearchText.isEmpty || 'home'.contains(localSearchText.toLowerCase()) || homeAddress.toLowerCase().contains(localSearchText.toLowerCase()));
+            bool showWork = workAddress != null && (localSearchText.isEmpty || 'work'.contains(localSearchText.toLowerCase()) || workAddress.toLowerCase().contains(localSearchText.toLowerCase()));
+
+            return Padding(
+              padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom), 
+              child: Container(
+                decoration: const BoxDecoration(
+                  color: Colors.black, 
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+                ),
+                child: SafeArea(
+                  bottom: false,
+                  child: Container(
+                    height: MediaQuery.of(context).size.height * 0.65,
+                    decoration: const BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
+                          child: Text(
+                            isPickup ? 'Choose Pickup Location' : 'Choose Dropoff Location', 
+                            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black)
+                          ),
+                        ),
+                        
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                          child: TextField(
+                            autofocus: true,
+                            decoration: InputDecoration(
+                              hintText: 'Search or type custom location...',
+                              prefixIcon: const Icon(Icons.search, color: Colors.black54),
+                              filled: true,
+                              fillColor: Colors.grey[200],
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                              contentPadding: const EdgeInsets.symmetric(vertical: 0),
+                            ),
+                            onChanged: (val) {
+                              setSheetState(() => localSearchText = val);
+                            },
+                          ),
+                        ),
+
+                        if (showHome)
+                          ListTile(
+                            leading: const Icon(Icons.home, color: Colors.black54),
+                            title: const Text('Home', style: TextStyle(fontWeight: FontWeight.bold)),
+                            subtitle: Text(homeAddress!, style: const TextStyle(color: Colors.grey)),
+                            onTap: () => Navigator.pop(sheetContext, homeAddress),
+                          ),
+                        
+                        if (showWork)
+                          ListTile(
+                            leading: const Icon(Icons.work, color: Colors.black54),
+                            title: const Text('Work', style: TextStyle(fontWeight: FontWeight.bold)),
+                            subtitle: Text(workAddress!, style: const TextStyle(color: Colors.grey)),
+                            onTap: () => Navigator.pop(sheetContext, workAddress),
+                          ),
+                        
+                        if (localSearchText.isNotEmpty && sheetFiltered.isEmpty && !showHome && !showWork)
+                          ListTile(
+                            leading: const Icon(Icons.edit_location_alt, color: Colors.black),
+                            title: Text(isPickup ? 'Set pickup as "$localSearchText"' : 'Drop off at "$localSearchText"', style: const TextStyle(fontWeight: FontWeight.bold)),
+                            onTap: () => Navigator.pop(sheetContext, localSearchText), 
+                          ),
+
+                        const Divider(height: 1),
+                        Expanded(
+                          child: ListView.builder(
+                            itemCount: sheetFiltered.length,
+                            itemBuilder: (context, index) {
+                              final location = sheetFiltered[index];
+                              return ListTile(
+                                leading: const Icon(Icons.place_outlined, color: Colors.black54),
+                                title: Text(location.name),
+                                onTap: () => Navigator.pop(sheetContext, location), 
+                              );
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            );
+          }
+        );
+      },
+    );
+
+    if (!mounted || selected == null) return;
+    
+    setState(() {
+      String locationName = '';
+      if (selected is String) {
+        locationName = selected;
+      } else if (selected is DropoffLocation) {
+        locationName = selected.name;
+      }
+
+      // Assign to the correct controller
+      if (isPickup) {
+        _pickupController.text = locationName;
+      } else {
+        _dropoffController.text = locationName;
+      }
+    });
+  }
+
   Future<void> _confirmSchedule() async {
     if (_pickupController.text.isEmpty || _dropoffController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -401,7 +536,6 @@ class _ScheduleBookingScreenState extends ConsumerState<ScheduleBookingScreen> {
 
     setState(() => _isLoading = true);
 
-    // 1. Combine Date and Time into a single DateTime object
     final scheduledDateTime = DateTime(
       _selectedDate!.year,
       _selectedDate!.month,
@@ -410,10 +544,8 @@ class _ScheduleBookingScreenState extends ConsumerState<ScheduleBookingScreen> {
       _selectedTime!.minute,
     );
 
-    // 2. Generate a 4-digit Ride PIN for the commuter
     final String ridePin = (Random().nextInt(9000) + 1000).toString();
 
-    // 3. Construct the Scheduled Trip Model
     final newTrip = TripModel(
       tripID: DateTime.now().millisecondsSinceEpoch.toString(), // Unique ID
       status: TripStatus
@@ -427,13 +559,11 @@ class _ScheduleBookingScreenState extends ConsumerState<ScheduleBookingScreen> {
       scheduledTime: Timestamp.fromDate(scheduledDateTime),
     );
 
-    // 4. Send to Firestore via the Controller
     await ref.read(tripControllerProvider.notifier).scheduleRide(newTrip);
 
     if (!mounted) return;
     setState(() => _isLoading = false);
 
-    // 5. Handle success or error
     final tripState = ref.read(tripControllerProvider);
     if (tripState is AsyncError) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -449,7 +579,7 @@ class _ScheduleBookingScreenState extends ConsumerState<ScheduleBookingScreen> {
           backgroundColor: Color(0xFF66D2A3),
         ),
       );
-      Navigator.pop(context); // Return to home screen
+      Navigator.pop(context); 
     }
   }
 
@@ -485,7 +615,6 @@ class _ScheduleBookingScreenState extends ConsumerState<ScheduleBookingScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // 1. Location Inputs (Uber/Ola style connected dots)
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
@@ -498,8 +627,9 @@ class _ScheduleBookingScreenState extends ConsumerState<ScheduleBookingScreen> {
                         _buildLocationRow(
                           icon: Icons.circle,
                           iconColor: const Color(0xFF66D2A3),
-                          hint: 'Pickup Location (e.g. Hall 12)',
+                          hint: 'Pickup',
                           controller: _pickupController,
+                          onTap: () => _openLocationSelector(isPickup: true),
                         ),
                         Align(
                           alignment: Alignment.centerLeft,
@@ -517,8 +647,9 @@ class _ScheduleBookingScreenState extends ConsumerState<ScheduleBookingScreen> {
                         _buildLocationRow(
                           icon: Icons.square,
                           iconColor: Colors.black,
-                          hint: 'Where to? (e.g. Academic Area)',
+                          hint: 'Dropoff',
                           controller: _dropoffController,
+                          onTap: () => _openLocationSelector(isPickup: false),
                         ),
                       ],
                     ),
@@ -536,7 +667,6 @@ class _ScheduleBookingScreenState extends ConsumerState<ScheduleBookingScreen> {
                   ),
                   const SizedBox(height: 12),
 
-                  // 2. Date and Time Selectors
                   Row(
                     children: [
                       Expanded(
@@ -565,7 +695,6 @@ class _ScheduleBookingScreenState extends ConsumerState<ScheduleBookingScreen> {
 
                   const SizedBox(height: 32),
 
-                  // 3. Info Card
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
@@ -597,7 +726,6 @@ class _ScheduleBookingScreenState extends ConsumerState<ScheduleBookingScreen> {
             ),
           ),
 
-          // 4. Bottom Confirm Button
           Container(
             padding: const EdgeInsets.all(24),
             decoration: const BoxDecoration(
@@ -647,12 +775,14 @@ class _ScheduleBookingScreenState extends ConsumerState<ScheduleBookingScreen> {
     );
   }
 
-  // Helper Widget for Pickup/Dropoff inputs
+  // --- UPDATED ROW HELPER ---
+  // Now explicitly makes the text field Read-Only and uses onTap to trigger the sheet
   Widget _buildLocationRow({
     required IconData icon,
     required Color iconColor,
     required String hint,
     required TextEditingController controller,
+    required VoidCallback onTap,
   }) {
     return Row(
       children: [
@@ -661,6 +791,8 @@ class _ScheduleBookingScreenState extends ConsumerState<ScheduleBookingScreen> {
         Expanded(
           child: TextField(
             controller: controller,
+            readOnly: true, // Prevents keyboard from popping up, forces bottom sheet
+            onTap: onTap,
             decoration: InputDecoration(
               hintText: hint,
               hintStyle: const TextStyle(color: Colors.grey, fontSize: 16),
@@ -675,7 +807,6 @@ class _ScheduleBookingScreenState extends ConsumerState<ScheduleBookingScreen> {
     );
   }
 
-  // Helper Widget for Date/Time picker buttons
   Widget _buildDateTimePicker({
     required IconData icon,
     required String label,

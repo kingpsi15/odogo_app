@@ -321,7 +321,7 @@ class _MapHomeViewState extends ConsumerState<_MapHomeView> with WidgetsBindingO
                       children: [
                         const Padding(
                           padding: EdgeInsets.fromLTRB(20, 20, 20, 8),
-                          child: Text('Choose pickup point', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black)),
+                          child: Text('Choose Pickup Location', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black)),
                         ),
                         
                         Padding(
@@ -467,7 +467,7 @@ class _MapHomeViewState extends ConsumerState<_MapHomeView> with WidgetsBindingO
                       children: [
                         const Padding(
                           padding: EdgeInsets.fromLTRB(20, 20, 20, 8),
-                          child: Text('Where to?', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black)),
+                          child: Text('Choose Dropoff Location', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black)),
                         ),
                         
                         Padding(
@@ -688,7 +688,7 @@ class _MapHomeViewState extends ConsumerState<_MapHomeView> with WidgetsBindingO
                         const SizedBox(width: 10),
                         const Expanded(
                           child: Text(
-                            'Dropoff: Where to?',
+                            'Dropoff',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Colors.black87),

@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart'; // ADDED: Required to safely route using context.go
 import '../controllers/trip_controller.dart'; 
-import 'driver_home_screen.dart'; // ADDED: Required for the routing fix
 
 class DriverCancelConfirmationScreen extends ConsumerStatefulWidget {
   final String tripID; 
@@ -38,13 +38,9 @@ class _DriverCancelConfirmationScreenState extends ConsumerState<DriverCancelCon
         ),
       );
 
-      // 3. NUCLEAR ROUTING FIX: 
-      // Wipe the entire broken navigation stack and force the Driver Dashboard to rebuild from scratch.
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(builder: (context) => const DriverHomeScreen()),
-        (route) => false,
-      );
+      // 3. NUCLEAR ROUTING FIX (GoRouter Safe): 
+      // This safely tells GoRouter to wipe the current flow and route to the home dashboard.
+      context.go('/driver-home');
 
     } catch (e) {
       if (!mounted) return;

@@ -9,12 +9,10 @@ import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
 import 'package:odogo_app/controllers/trip_controller.dart';
 import 'package:odogo_app/models/enums.dart';
-import 'package:odogo_app/models/trip_model.dart';
-import 'commuter_home.dart';
 
-// Make sure these files exist!
 import 'commuter_cancel_confirmation_screen.dart';
 import 'pickup_confirmed_screen.dart';
+import 'waiting_for_driver_screen.dart'; // REQUIRED to route back
 
 class RideConfirmedScreen extends ConsumerStatefulWidget {
   final String tripID;
@@ -183,62 +181,52 @@ class _RideConfirmedScreenState extends ConsumerState<RideConfirmedScreen> {
 
   @override
   Widget build(BuildContext context) {
-
-    final activeTripAsync = ref.watch(activeTripStreamProvider(widget.tripID));
-    final trip = activeTripAsync.value;
-
-    // Riverpod listener in build is required for ConsumerStatefulWidget context.
-    ref.listen<AsyncValue<TripModel?>>(activeTripStreamProvider(widget.tripID), (previous, next) {
+    // THE SMART LISTENER FOR THE COMMUTER
+    ref.listen(activeTripStreamProvider(widget.tripID), (previous, next) {
       final trip = next.value;
       if (trip == null) return;
 
-      if (trip.status == TripStatus.cancelled) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Ride cancelled successfully.'),
-              backgroundColor: Colors.red,
-              duration: Duration(seconds: 2),
+      // SCENARIO: DRIVER CANCELLED! (Status falls back to pending)
+      if (trip.status == TripStatus.pending) {
+        
+        // 1. Show the Commuter the message instantly
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Driver cancelled the ride. Searching for a new driver...'),
+            backgroundColor: Colors.orange,
+            duration: Duration(seconds: 4),
+          ),
+        );
+
+        // 2. THE NUCLEAR ROUTING FIX
+        // Wipe this screen and force the app to directly open the Waiting Screen.
+        // We pass 'wasDropped: true' to trigger the orange UI, and we pass the coordinates
+        // so they DO NOT have to enter them again.
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(
+            builder: (context) => WaitingForDriverScreen(
+              tripID: widget.tripID,
+              dropoffPoint: widget.dropoffPoint,
+              pickupPoint: widget.pickupPoint,
+              wasDropped: true, // Triggers the orange "Re-searching" UI
             ),
-          );
-          Navigator.pushAndRemoveUntil(
-            context,
-            MaterialPageRoute(builder: (context) => const CommuterHomeScreen()),
-            (route) => false,
-          );
-        }
+          ),
+          (route) => route.isFirst, // Keeps the bottom-most Commuter Map alive, kills everything else
+        );
       }
 
-      if (trip.status == TripStatus.pending && previous?.value?.status == TripStatus.confirmed) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Driver cancelled. Returning to home.'),
-              backgroundColor: Colors.orange,
-              duration: Duration(seconds: 2),
-            ),
-          );
-
-          Navigator.pushAndRemoveUntil(
-            context,
-            MaterialPageRoute(builder: (context) => const CommuterHomeScreen()),
-            (route) => false,
-          );
-        }
-      }
-
-      if (trip.status == TripStatus.ongoing) {
-        if (mounted) {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(
-              builder: (context) => PickupConfirmedScreen(dropoffPoint: _dropoffLocation),
-            ),
-          );
-        }
+      // If driver starts the ride, proceed to the active trip screen
+      if (trip.status == TripStatus.ongoing) { 
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => PickupConfirmedScreen(dropoffPoint: _dropoffLocation)),
+        );
       }
     });
 
+    final activeTripAsync = ref.watch(activeTripStreamProvider(widget.tripID));
+    final trip = activeTripAsync.value;
     final routePoints = _polylinePoints();
     final mapKey = '${routePoints.length}-${_currentLocation.latitude.toStringAsFixed(5)}-${_currentLocation.longitude.toStringAsFixed(5)}';
 
@@ -365,7 +353,7 @@ class _RideConfirmedScreenState extends ConsumerState<RideConfirmedScreen> {
                         child: Column(
                           children: [
                             Text('$_etaMinutesToPickup', style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
-                            const Text('MINS', style: TextStyle(color: const Color(0xFF66D2A3), fontSize: 10, fontWeight: FontWeight.bold)),
+                            const Text('MINS', style: TextStyle(color: Color(0xFF66D2A3), fontSize: 10, fontWeight: FontWeight.bold)),
                           ],
                         ),
                       ),

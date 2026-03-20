@@ -5,16 +5,21 @@ import 'package:latlong2/latlong.dart';
 import 'package:odogo_app/controllers/trip_controller.dart';
 import 'package:odogo_app/models/enums.dart';
 import 'package:odogo_app/models/trip_model.dart';
-import 'commuter_home.dart';
 import 'ride_confirmed_screen.dart';
-import 'commuter_cancel_confirmation_screen.dart';
 
 class WaitingForDriverScreen extends ConsumerStatefulWidget { 
   final LatLng? dropoffPoint;
   final LatLng? pickupPoint;
   final String tripID;
+  final bool wasDropped; // NEW: Tells the screen if the driver just bailed on them
 
-  const WaitingForDriverScreen({super.key, required this.tripID, this.dropoffPoint, this.pickupPoint});
+  const WaitingForDriverScreen({
+    super.key, 
+    required this.tripID, 
+    this.dropoffPoint, 
+    this.pickupPoint, 
+    this.wasDropped = false, // Defaults to false for normal searches
+  });
 
   @override
   ConsumerState<WaitingForDriverScreen> createState() => _WaitingForDriverScreenState();
@@ -22,30 +27,39 @@ class WaitingForDriverScreen extends ConsumerStatefulWidget {
 
 class _WaitingForDriverScreenState extends ConsumerState<WaitingForDriverScreen> {
   bool _isCancelling = false;
-  
-  // NEW STATE: Tracks if they are in the queue for the first time, or if they were dropped
-  bool _wasDroppedByDriver = false; 
+  late bool _wasDroppedByDriver; 
 
   @override
   void initState() {
     super.initState();
+    // Inherit the flag from the constructor when the screen builds
+    _wasDroppedByDriver = widget.wasDropped; 
   }
 
   Future<void> _cancelRide() async {
-    if (_isCancelling) return;
+    setState(() => _isCancelling = true);
 
-    // Navigate to the confirmation screen; it handles cancellation and redirection.
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => CommuterCancelConfirmationScreen(tripID: widget.tripID),
-      ),
-    );
+    try {
+      await ref.read(tripControllerProvider.notifier).cancelRide(widget.tripID);
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Ride request cancelled.'), backgroundColor: Colors.red),
+      );
+      
+      Navigator.pop(context);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isCancelling = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString()), backgroundColor: Colors.red),
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    // THE SMART LISTENER
     ref.listen<AsyncValue<TripModel?>>(
       activeTripStreamProvider(widget.tripID),
       (previous, next) {
@@ -54,14 +68,13 @@ class _WaitingForDriverScreenState extends ConsumerState<WaitingForDriverScreen>
 
         if (trip == null) return;
 
-        // SCENARIO A: Driver Accepts
+        // SCENARIO A: A New Driver Accepts!
         if (trip.status == TripStatus.confirmed && prevTrip?.status == TripStatus.pending) {
-          // If they finally get a new driver after being dropped, reset the flag
           if (_wasDroppedByDriver) {
             setState(() => _wasDroppedByDriver = false);
           }
           
-          Navigator.push(
+          Navigator.pushReplacement(
             context,
             MaterialPageRoute(
               builder: (context) => RideConfirmedScreen(
@@ -69,24 +82,6 @@ class _WaitingForDriverScreenState extends ConsumerState<WaitingForDriverScreen>
                 dropoffPoint: widget.dropoffPoint,
                 pickupPoint: widget.pickupPoint,
               ),
-            ),
-          );
-        }
-
-        // SCENARIO B: Driver Cancels (Status drops from confirmed BACK to pending)
-        if (trip.status == TripStatus.pending && prevTrip?.status == TripStatus.confirmed) {
-          // NOTE: Driver cancelled the shared trip, so commuter should be sent to Home now.
-          Navigator.pushAndRemoveUntil(
-            context,
-            MaterialPageRoute(builder: (context) => const CommuterHomeScreen()),
-            (route) => false,
-          );
-
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Driver cancelled. Returning to home.'),
-              backgroundColor: Colors.orange,
-              duration: Duration(seconds: 4),
             ),
           );
         }
@@ -182,8 +177,6 @@ class _WaitingForDriverScreenState extends ConsumerState<WaitingForDriverScreen>
                 const Text('TRIP STATUS', style: TextStyle(color: Colors.grey, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
                 const SizedBox(height: 8),
                 
-                // --- THE UI FIX ---
-                // Dynamically changes text and color so the user knows they are being re-searched!
                 Text(
                   _wasDroppedByDriver ? 'DRIVER CANCELLED.\nRE-SEARCHING...' : 'WAITING FOR DRIVER', 
                   style: TextStyle(
@@ -200,7 +193,6 @@ class _WaitingForDriverScreenState extends ConsumerState<WaitingForDriverScreen>
                   child: LinearProgressIndicator(
                     minHeight: 6,
                     backgroundColor: Colors.grey[200],
-                    // Changes loading bar to orange if they got dropped
                     color: _wasDroppedByDriver ? Colors.orange : const Color(0xFF66D2A3),
                   ),
                 ),

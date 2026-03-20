@@ -1,61 +1,35 @@
 import 'package:flutter/material.dart';
-
 import 'package:flutter_map/flutter_map.dart';
-
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
 import 'package:geolocator/geolocator.dart';
-
 import 'package:latlong2/latlong.dart';
-
 import 'package:odogo_app/controllers/auth_controller.dart';
-
 import 'package:odogo_app/controllers/trip_controller.dart';
-
 import 'package:odogo_app/controllers/user_controller.dart';
-
 import 'package:odogo_app/models/enums.dart';
-
 import 'package:odogo_app/models/trip_model.dart';
-
 import 'dart:async';
-
 import '../services/notification_permission_service.dart';
-
-// 1. LINKING THE PROFILE & BOOKINGS PAGES
-
 import 'driver_profile_screen.dart';
-
 import 'driver_bookings_screen.dart';
-
 import 'driver_active_pickup_screen.dart';
 
 class DriverHomeScreen extends ConsumerStatefulWidget {
   const DriverHomeScreen({super.key});
-
   @override
   ConsumerState<DriverHomeScreen> createState() => _DriverHomeScreenState();
 }
 
 class _DriverHomeScreenState extends ConsumerState<DriverHomeScreen> {
   final Color odogoGreen = const Color(0xFF66D2A3);
-
   final MapController _mapController = MapController();
-
   static const LatLng _defaultCenter = LatLng(26.5123, 80.2329);
-
   static const double _recenterThresholdMeters = 25;
-
   static const double _bottomOverlayInset = 20;
-
   LatLng? _currentLocation;
-
   LatLng? _lastRecenterLocation;
-
   StreamSubscription<Position>? _locationSubscription;
-
   final GlobalKey _bottomOverlayKey = GlobalKey();
-
   double _bottomOverlayHeight = 0;
 
   double get _verticalCenterOffsetPx {
@@ -65,15 +39,10 @@ class _DriverHomeScreenState extends ConsumerState<DriverHomeScreen> {
   void _measureBottomOverlayHeight() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final context = _bottomOverlayKey.currentContext;
-
       if (context == null || !mounted) return;
-
       final renderObject = context.findRenderObject();
-
       if (renderObject is! RenderBox) return;
-
       final measuredHeight = renderObject.size.height;
-
       if ((measuredHeight - _bottomOverlayHeight).abs() < 1) return;
 
       setState(() {
@@ -84,15 +53,7 @@ class _DriverHomeScreenState extends ConsumerState<DriverHomeScreen> {
 
   // --- NAVIGATION STATE ---
 
-  int _selectedIndex = 0; // 0 = Map, 1 = Bookings, 2 = Profile
-
-  // --- MAP STATE ---
-
-  // bool _isOnline = false;
-
-  // bool _hasIncomingRequest = false;
-
-  // Timer? _simulationTimer;
+  int _selectedIndex = 0;
 
   @override
   void initState() {
@@ -103,27 +64,19 @@ class _DriverHomeScreenState extends ConsumerState<DriverHomeScreen> {
 
   Future<void> _startLocationStream() async {
     // Request permission first — before checking service, so the dialog appears.
-
     var permission = await Geolocator.checkPermission();
-
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
     }
-
     if (!mounted) return;
-
     if (permission == LocationPermission.denied ||
         permission == LocationPermission.deniedForever) {
       return;
     }
-
     final serviceEnabled = await Geolocator.isLocationServiceEnabled();
-
     if (!serviceEnabled || !mounted) return;
-
     const locationSettings = LocationSettings(
       accuracy: LocationAccuracy.high,
-
       distanceFilter: 3,
     );
 
@@ -132,7 +85,6 @@ class _DriverHomeScreenState extends ConsumerState<DriverHomeScreen> {
           (position) {
             _applyLocationUpdate(LatLng(position.latitude, position.longitude));
           },
-
           onError: (_) {},
         );
   }
@@ -229,16 +181,9 @@ class _DriverHomeScreenState extends ConsumerState<DriverHomeScreen> {
         ),
       );
     }
-
-    // void _acceptRide() {
-    // // Push to the active pickup screen!
-    // Navigator.push(
-    //   context,
-    //   MaterialPageRoute(builder: (context) => const DriverActivePickupScreen()),
-    // );
   }
 
-  @override // Removed the duplicate @override
+  @override
   Widget build(BuildContext context) {
     _measureBottomOverlayHeight();
 
@@ -584,7 +529,6 @@ class _DriverHomeScreenState extends ConsumerState<DriverHomeScreen> {
                       ? Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            // 1. Replaced !_hasIncomingRequest with checking the real trip!
                             if (incomingTrip == null) ...[
                               SizedBox(
                                 width: 18,
@@ -661,7 +605,10 @@ class _DriverHomeScreenState extends ConsumerState<DriverHomeScreen> {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
 
                         children: [
-                          _buildMapInfoRow('Drop:', incomingTrip.endLocName),
+                          Expanded(
+                            child: _buildMapInfoRow('Drop:', incomingTrip.endLocName),
+                          ),
+                          const SizedBox(width: 12),
 
                           ElevatedButton(
                             onPressed: () async {
@@ -771,6 +718,7 @@ class _DriverHomeScreenState extends ConsumerState<DriverHomeScreen> {
       padding: const EdgeInsets.symmetric(vertical: 4),
 
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             '$label ',
@@ -780,14 +728,16 @@ class _DriverHomeScreenState extends ConsumerState<DriverHomeScreen> {
               color: Colors.black,
             ),
           ),
-          Text(
-            value,
-            style: const TextStyle(
-              color: Colors.grey,
-              fontWeight: FontWeight.bold,
-              fontSize: 16,
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(
+                color: Colors.grey,
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+              ),
             ),
-          ),
+          )
         ],
       ),
     );

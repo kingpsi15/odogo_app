@@ -324,7 +324,6 @@ class _DriverActivePickupScreenState extends ConsumerState<DriverActivePickupScr
   }
 
   // --- UPDATED CANCEL TRIP LOGIC ---
-  // --- UPDATED CANCEL TRIP LOGIC ---
   void _cancelTrip() {
     // Hide the keyboard just in case it's open
     FocusScope.of(context).unfocus();
@@ -346,7 +345,6 @@ class _DriverActivePickupScreenState extends ConsumerState<DriverActivePickupScr
     final activeTripAsync = ref.watch(activeTripStreamProvider(widget.tripID));
     final trip = activeTripAsync.value;
 
-    // ref.listen must be used in build in ConsumerStatefulWidget
     ref.listen<AsyncValue<TripModel?>>(activeTripStreamProvider(widget.tripID), (previous, next) {
       final currentTrip = next.value;
       final prevTrip = previous?.value;
@@ -373,25 +371,6 @@ class _DriverActivePickupScreenState extends ConsumerState<DriverActivePickupScr
           });
         }
       }
-
-      // if (currentTrip != null &&
-      //     currentTrip.status == TripStatus.pending &&
-      //     prevTrip?.status == TripStatus.confirmed) {
-      //   if (mounted) {
-      //     ScaffoldMessenger.of(context).showSnackBar(
-      //       const SnackBar(
-      //         content: Text('Trip dropped; searching for another ride...'),
-      //         backgroundColor: Colors.orange,
-      //         duration: Duration(seconds: 2),
-      //       ),
-      //     );
-      //     Future.delayed(const Duration(milliseconds: 500), () {
-      //       if (mounted) {
-      //         context.go('/driver-home');
-      //       }
-      //     });
-      //   }
-      // }
     });
 
     final polylinePoints = _polylinePoints;
@@ -532,9 +511,14 @@ class _DriverActivePickupScreenState extends ConsumerState<DriverActivePickupScr
                           children: [
                             Text(trip?.commuterName ?? '---', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black, fontSize: 16)),
                             SizedBox(height: 4),
-                            Row(children: [
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
                               Icon(Icons.location_on, size: 14, color: Colors.grey),
-                              Text('Pickup: ${trip?.startLocName ?? '---'}', style: TextStyle(color: Colors.grey, fontSize: 13, fontWeight: FontWeight.w600)),
+                              const SizedBox(width: 4),
+                              Expanded(
+                                child: Text('Pickup: ${trip?.startLocName ?? '---'}', style: TextStyle(color: Colors.grey, fontSize: 13, fontWeight: FontWeight.w600)),
+                              )
                             ]),
                           ],
                         ),

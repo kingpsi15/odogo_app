@@ -35,23 +35,12 @@ class _PickupConfirmedScreenState extends ConsumerState<PickupConfirmedScreen> {
   StreamSubscription<Position>? _userLocationSubscription;
   final GlobalKey _bottomCardKey = GlobalKey();
   double _bottomCardHeight = 0;
-  Timer? _tripEndNotificationTimer;
 
   @override
   void initState() {
     super.initState();
     _dropoffLocation = widget.dropoffPoint ?? _fallbackDropoffLocation;
     _initializeTrip();
-    _scheduleTripEndConfirmationPopup();
-  }
-
-  void _scheduleTripEndConfirmationPopup() {
-    _tripEndNotificationTimer?.cancel();
-    _tripEndNotificationTimer = Timer(const Duration(seconds: 5), () {
-      if (mounted) {
-        _showTripEndConfirmationDialog();
-      }
-    });
   }
 
   Future<void> _initializeTrip() async {
@@ -273,42 +262,8 @@ class _PickupConfirmedScreenState extends ConsumerState<PickupConfirmedScreen> {
     Navigator.pop(context);
   }
 
-  void _showTripEndConfirmationDialog() {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF1E1E1E),
-        title: const Text('Trip Completed', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-        content: const Text(
-          'Did you reach your destination? Please confirm or decline.',
-          style: TextStyle(color: Colors.grey),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context); // Close dialog
-              // For testing: if user declines, show the same popup again after 5 seconds.
-              _scheduleTripEndConfirmationPopup();
-            },
-            child: const Text('Decline', style: TextStyle(color: Colors.red)),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context); // Close dialog
-              _tripEndNotificationTimer?.cancel();
-              Navigator.popUntil(context, (route) => route.isFirst);
-            },
-            child: const Text('Confirm', style: TextStyle(color: Color(0xFF66D2A3))),
-          ),
-        ],
-      ),
-    );
-  }
-
   @override
   void dispose() {
-    _tripEndNotificationTimer?.cancel();
     _userLocationSubscription?.cancel();
     super.dispose();
   }
@@ -327,6 +282,8 @@ class _PickupConfirmedScreenState extends ConsumerState<PickupConfirmedScreen> {
         );
       }
     });
+    final activeTripAsync = ref.watch(activeTripStreamProvider(widget.tripID));
+    final trip = activeTripAsync.value;
     final routePoints = _polylinePoints();
     final mapKey =
         '${routePoints.length}-${_userLocation.latitude.toStringAsFixed(5)}-${_userLocation.longitude.toStringAsFixed(5)}-${_bottomCardHeight.round()}';
@@ -486,15 +443,15 @@ class _PickupConfirmedScreenState extends ConsumerState<PickupConfirmedScreen> {
                         child: const Icon(Icons.location_on, color: Colors.red, size: 24),
                       ),
                       const SizedBox(width: 16),
-                      const Expanded(
+                      Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'Open Air Theatre(OAT)',
+                              trip?.endLocName ?? '---',
                               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                             ),
-                            Text(
+                            const Text(
                               'IIT Kanpur Campus',
                               style: TextStyle(color: Colors.grey, fontSize: 13),
                             ),
@@ -511,9 +468,9 @@ class _PickupConfirmedScreenState extends ConsumerState<PickupConfirmedScreen> {
                         child: const Icon(Icons.person, color: Colors.grey),
                       ),
                       const SizedBox(width: 12),
-                      const Expanded(
+                      Expanded(
                         child: Text(
-                          'Arman',
+                          trip?.driverName ?? '---',
                           style: TextStyle(
                             fontWeight: FontWeight.bold,
                             color: Colors.black,
@@ -530,29 +487,6 @@ class _PickupConfirmedScreenState extends ConsumerState<PickupConfirmedScreen> {
                         onPressed: () {},
                       ),
                     ],
-                  ),
-                  const SizedBox(height: 20),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 54,
-                    child: OutlinedButton(
-                      style: OutlinedButton.styleFrom(
-                        side: const BorderSide(color: Colors.red, width: 2),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                      ),
-                      onPressed: _showTripEndConfirmationDialog,
-                      child: const Text(
-                        'END TRIP',
-                        style: TextStyle(
-                          color: Colors.red,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                          letterSpacing: 1.2,
-                        ),
-                      ),
-                    ),
                   ),
                 ],
               ),

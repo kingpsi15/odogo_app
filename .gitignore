@@ -50,17 +50,9 @@ app.*.map.json
 
 # Local machine SDK path
 /android/local.properties
-
-# 1. Firebase Configuration Files
+# --- FIREBASE SECRETS ---
 android/app/google-services.json
 ios/Runner/GoogleService-Info.plist
-macos/Runner/GoogleService-Info.plist
+firebase.json
+.firebaserc
 lib/firebase_options.dart
-
-# 2. Android App Signing & Keystores
-*.jks
-*.keystore
-android/key.properties
-
-# 3. Environment Variables
-.env

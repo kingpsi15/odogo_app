@@ -3,17 +3,17 @@
 <plist version="1.0">
 <dict>
 	<key>API_KEY</key>
-	<string>AIzaSyCpVL5tK8HRr-mTugdGVyMkHDrP8GUKkc0</string>
+	<string>AIzaSyB4FPR1gcvNI5HX8X1ssS2yTuyBFWGFzUI</string>
 	<key>GCM_SENDER_ID</key>
-	<string>1036537828767</string>
+	<string>1014951075906</string>
 	<key>PLIST_VERSION</key>
 	<string>1</string>
 	<key>BUNDLE_ID</key>
 	<string>com.example.odogoApp</string>
 	<key>PROJECT_ID</key>
-	<string>odogo-7fb58</string>
+	<string>odogo-373eb</string>
 	<key>STORAGE_BUCKET</key>
-	<string>odogo-7fb58.firebasestorage.app</string>
+	<string>odogo-373eb.firebasestorage.app</string>
 	<key>IS_ADS_ENABLED</key>
 	<false></false>
 	<key>IS_ANALYTICS_ENABLED</key>
@@ -25,6 +25,6 @@
 	<key>IS_SIGNIN_ENABLED</key>
 	<true></true>
 	<key>GOOGLE_APP_ID</key>
-	<string>1:1036537828767:ios:e3e5d06d7da6e6628c59aa</string>
+	<string>1:1014951075906:ios:8978ac561536988b348ddb</string>
 </dict>
 </plist>

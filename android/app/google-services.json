@@ -1,13 +1,13 @@
 {
   "project_info": {
-    "project_number": "1036537828767",
-    "project_id": "odogo-7fb58",
-    "storage_bucket": "odogo-7fb58.firebasestorage.app"
+    "project_number": "1014951075906",
+    "project_id": "odogo-373eb",
+    "storage_bucket": "odogo-373eb.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:1036537828767:android:1572bd50722519978c59aa",
+        "mobilesdk_app_id": "1:1014951075906:android:c531c4fcff48f331348ddb",
         "android_client_info": {
           "package_name": "com.example.odogo_app"
         }
@@ -15,7 +15,7 @@
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyAcOYowRIEZ_Ze_MhnhVoAss826R5aWLeI"
+          "current_key": "AIzaSyAxVpc7iMg79WBEVkobDY1lOX-v9IUeaYY"
         }
       ],
       "services": {

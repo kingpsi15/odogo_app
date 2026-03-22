@@ -3,14 +3,14 @@ OdoGo: Campus Ride-Sharing Application
 
 ![OdoGo Hero Image](/assets/images/odogo_app_logo.png)
 
-This full-stack web application is made as a course project of [CS253](https://www.cse.iitk.ac.in/users/isaha/Courses/sdo25.shtml/): Software Development and Operations in Spring 2024 under the guidance of [Prof. Indranil Saha](https://www.cse.iitk.ac.in/users/isaha/). This full-stack Flutter application was built to solve intra-campus mobility issues (specifically targeting the IITK campus environment). OdoGo is an integrated ride-sharing platform connecting two distinct user categories within a single application: **Commuters** and **Drivers**.
+This full-stack Android application is made as a course project of [CS253](https://www.cse.iitk.ac.in/users/isaha/Courses/sdo25.shtml/): Software Development and Operations in Spring 2026 under the guidance of [Prof. Indranil Saha](https://www.cse.iitk.ac.in/users/isaha/). This full-stack Flutter application was built to solve intra-campus mobility issues (specifically targeting the IITK campus environment). OdoGo is an integrated ride-sharing platform connecting two distinct user categories within a single application: **Commuters** and **Drivers**.
 
 The platform simplifies booking immediate rides, scheduling future trips, and tracking real-time locations using custom map integrations.
 
 ## Core Features
 
 ### For Commuters:
-* **Dual-Booking Modes:** Request immediate rides or schedule rides in advance (with strict >20 min validations).
+* **Dual-Booking Modes:** Request immediate rides or schedule rides in advance (with strict ≥20 min validations).
 * **Smart Campus Routing:** Auto-completion and predefined drop-off/pickup markers for campus locations (e.g., Hall 12, Academic Area).
 * **Real-Time Tracking & Alerts:** Live map tracking via `flutter_map` and native push notifications when a driver accepts, arrives, or completes a trip.
 * **Secure OTP Rides:** Secure ride handoffs using a dynamically generated Ride PIN.
@@ -51,12 +51,26 @@ cd odogo_app
 flutter pub get
 ```
 
-**3. Run the App:**
-To make testing easier and avoid burning through API limits, use the following flag to bypass real OTP verification. 
-*(When using this flag, enter **`0000`** on the OTP screen to authenticate).*
+**3. Set up your Environment Variables (.env):**
+For security, API keys are not committed to this repository. To run the app locally, you must create a file named `.env` in the root directory of the project (at the same level as `pubspec.yaml`) and add the following configuration. 
+
+To make testing easier and avoid burning through API limits, leave the bypass flag set to true. *(When using this flag, enter **`0000`** on the OTP screen to authenticate).*
+
+```env
+# EmailJS Credentials
+EMAILJS_SERVICE_ID=
+EMAILJS_TEMPLATE_ID=
+EMAILJS_PUBLIC_KEY=
+
+# SMS Credentials
+SMS_API_KEY=
+```
+
+**4. Run the App:**
+Launch the app using the environment variables file you just created:
 
 ```bash
-flutter run --dart-define=BYPASS_OTP=true
+flutter run --dart-define-from-file=.env --dart-define=BYPASS_OTP=true
 ```
 
 ---
@@ -82,15 +96,18 @@ lib/
 
 **1. Commuter Home**
 > Features the `flutter_map` integration with custom drop-off/pickup markers.
-![Commuter Home](/assets/images/commuter_home.jpg)
+
+<img src="assets/images/commuter_home.jpg" width="300"/>
 
 **2. Driver Home**
 > Features an intelligent `StreamProvider` that automatically hides rides if they are claimed by another driver.
-![Driver Dashboard](/assets/images/driver_home.jpg)
+
+<img src="assets/images/driver_home.jpg" width="300"/>
 
 **3. Scheduled Booking Engine**
-> Allows commuters to book rides >20 minutes in advance.
-![Scheduled Booking](/assets/images/schedule_ride.jpg)
+> Allows commuters to book rides ≥20 minutes in advance.
+
+<img src="assets/images/schedule_ride.jpg" width="300"/>
 
 **4. Ride Flow**
 > Displays the active trip status. Commuters receive native push notifications featuring a dynamically generated 4-digit Ride PIN for secure handoffs.

@@ -9,9 +9,9 @@ class EmailOtpAuthService {
 
   static final EmailOtpAuthService instance = EmailOtpAuthService._();
 
-  static const String _emailJsServiceId = 'service_skmwut7';
-  static const String _emailJsTemplateId = 'template_9al743a';
-  static const String _emailJsPublicKey = 'nW9SMK2eWgUuzw-BB';
+  static const String _emailJsServiceId = String.fromEnvironment('EMAILJS_SERVICE_ID', defaultValue: '');
+  static const String _emailJsTemplateId = String.fromEnvironment('EMAILJS_TEMPLATE_ID', defaultValue: '');
+  static const String _emailJsPublicKey = String.fromEnvironment('EMAILJS_PUBLIC_KEY', defaultValue: '');
 
   static const Duration _otpValidity = Duration(minutes: 5);
   static const bool _bypassOtpFromEnv = bool.fromEnvironment('BYPASS_OTP', defaultValue: false);

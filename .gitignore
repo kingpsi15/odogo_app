@@ -22,7 +22,7 @@ pubspec.lock
 # The .vscode folder contains launch configuration and tasks you configure in
 # VS Code which you may wish to be included in version control, so this line
 # is commented out by default.
-#.vscode/
+.vscode/
 
 # Flutter/Dart/Pub related
 **/doc/api/
@@ -32,6 +32,7 @@ pubspec.lock
 **/ios/Flutter/ephemeral/
 .dart_tool/
 .flutter-plugins-dependencies
+.flutter-plugins-dependencies\ 2
 .pub-cache/
 .pub/
 /build/
@@ -56,3 +57,12 @@ ios/Runner/GoogleService-Info.plist
 firebase.json
 .firebaserc
 lib/firebase_options.dart
+
+.env
+macos/Runner/GoogleService-Info.plist
+lib/firebase_options.dart
+
+# Android App Signing & Keystores
+*.jks
+*.keystore
+android/key.properties

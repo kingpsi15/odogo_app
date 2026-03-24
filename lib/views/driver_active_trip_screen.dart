@@ -32,8 +32,7 @@ class DriverActiveTripScreen extends ConsumerStatefulWidget {
       _DriverActiveTripScreenState();
 }
 
-class _DriverActiveTripScreenState
-    extends ConsumerState<DriverActiveTripScreen> {
+class _DriverActiveTripScreenState extends ConsumerState<DriverActiveTripScreen> {
   static const LatLng _fallbackDropoffLocation = LatLng(26.5170, 80.2310);
   static const double _avgDriverSpeedMetersPerSecond = 4.5; // ~16.2 km/h
   static const double _minFitDistanceMeters = 5;
@@ -47,9 +46,14 @@ class _DriverActiveTripScreenState
   LatLng? _lastRouteOrigin;
   bool _isRouteLoading = false;
   bool _dropoffResolvedFromTrip = false;
+  
   StreamSubscription<Position>? _driverLocationSubscription;
   final GlobalKey _bottomCardKey = GlobalKey();
   double _bottomCardHeight = 0;
+
+  // 🔥 ADDED: MapController to make the camera follow the car
+  final MapController _mapController = MapController();
+  bool _isMapReady = false;
 
   @override
   void initState() {
@@ -65,9 +69,7 @@ class _DriverActiveTripScreenState
   }
 
   void _syncDropoffFromTrip(TripModel? trip) {
-    if (trip == null || _dropoffResolvedFromTrip) {
-      return;
-    }
+    if (trip == null || _dropoffResolvedFromTrip) return;
 
     final dropoffName = trip.endLocName;
     if (dropoffName.isEmpty) return;
@@ -82,8 +84,7 @@ class _DriverActiveTripScreenState
           _dropoffLocation.longitude,
           nextDropoff.latitude,
           nextDropoff.longitude,
-        ) >
-        _destinationRefreshThresholdMeters;
+        ) > _destinationRefreshThresholdMeters;
 
     if (!hasChanged) {
       _dropoffResolvedFromTrip = true;
@@ -100,19 +101,21 @@ class _DriverActiveTripScreenState
 
   Future<void> _setInitialDriverLocation() async {
     final hasPermission = await _ensureLocationPermission();
-    if (!mounted || !hasPermission) {
-      return;
-    }
+    if (!mounted || !hasPermission) return;
 
     try {
+      // 🔥 ADDED: Timeout so weak GPS doesn't freeze the screen
       final position = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.high,
-      );
+      ).timeout(const Duration(seconds: 10));
+      
       if (!mounted) return;
       setState(() {
         _driverLocation = LatLng(position.latitude, position.longitude);
       });
-      await _broadcastDriverTelemetry(_driverLocation);
+      
+      // 🔥 FIXED: Removed 'await' so Firebase doesn't block the UI
+      _broadcastDriverTelemetry(_driverLocation);
     } catch (_) {
       // Keep fallback/start point if location fetch fails.
     }
@@ -122,16 +125,20 @@ class _DriverActiveTripScreenState
     final driverID = ref.read(currentUserProvider)?.userID;
     if (driverID == null || driverID.isEmpty) return;
 
-    await ref
-        .read(telemetryControllerProvider)
-        .broadcastLocation(
-          DriverTelemetry(
-            driverID: driverID,
-            latitude: location.latitude,
-            longitude: location.longitude,
-            timestampMs: DateTime.now().millisecondsSinceEpoch,
-          ),
-        );
+    try {
+      await ref
+          .read(telemetryControllerProvider)
+          .broadcastLocation(
+            DriverTelemetry(
+              driverID: driverID,
+              latitude: location.latitude,
+              longitude: location.longitude,
+              timestampMs: DateTime.now().millisecondsSinceEpoch,
+            ),
+          );
+    } catch (e) {
+      print("Firebase write error: $e");
+    }
   }
 
   Future<bool> _ensureLocationPermission() async {
@@ -139,21 +146,15 @@ class _DriverActiveTripScreenState
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
     }
-
-    if (permission == LocationPermission.denied ||
-        permission == LocationPermission.deniedForever) {
+    if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) {
       return false;
     }
-
-    final serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    return serviceEnabled;
+    return await Geolocator.isLocationServiceEnabled();
   }
 
   Future<void> _startDriverLocationStream() async {
     final hasPermission = await _ensureLocationPermission();
-    if (!mounted || !hasPermission) {
-      return;
-    }
+    if (!mounted || !hasPermission) return;
 
     const locationSettings = LocationSettings(
       accuracy: LocationAccuracy.high,
@@ -175,7 +176,13 @@ class _DriverActiveTripScreenState
     setState(() {
       _driverLocation = location;
     });
+    
     _broadcastDriverTelemetry(location);
+
+    // 🔥 ADDED: Force camera to smoothly follow the driver
+    if (_isMapReady) {
+      _mapController.move(location, _mapController.camera.zoom);
+    }
 
     final shouldRefreshRoute =
         _lastRouteOrigin == null ||
@@ -184,8 +191,7 @@ class _DriverActiveTripScreenState
               _lastRouteOrigin!.longitude,
               location.latitude,
               location.longitude,
-            ) >=
-            _routeRefreshThresholdMeters;
+            ) >= _routeRefreshThresholdMeters;
 
     if (shouldRefreshRoute) {
       _loadRoadRoute();
@@ -194,7 +200,6 @@ class _DriverActiveTripScreenState
 
   Future<void> _loadRoadRoute() async {
     if (_isRouteLoading) return;
-
     _isRouteLoading = true;
 
     final uri = Uri.parse(
@@ -234,13 +239,14 @@ class _DriverActiveTripScreenState
     } catch (_) {
       // Keep straight-line fallback if routing API is unavailable.
     } finally {
-      _isRouteLoading = false;
+      if (mounted) setState(() => _isRouteLoading = false);
     }
   }
 
   List<LatLng> get _polylinePoints {
     if (_routePoints != null && _routePoints!.length >= 2) {
-      return _routePoints!;
+      // 🔥 FIXED: Dynamically glue the blue route line to the moving car
+      return [_driverLocation, ..._routePoints!];
     }
     return [_driverLocation, _dropoffLocation];
   }
@@ -253,13 +259,11 @@ class _DriverActiveTripScreenState
       _dropoffLocation.longitude,
     );
 
-    final etaMinutes = (distanceMeters / _avgDriverSpeedMetersPerSecond / 60)
-        .ceil();
+    final etaMinutes = (distanceMeters / _avgDriverSpeedMetersPerSecond / 60).ceil();
     return etaMinutes < 1 ? 1 : etaMinutes;
   }
 
   EdgeInsets _cameraFitPadding() {
-    // Include card height + its bottom inset (24) so route stays above overlay.
     return EdgeInsets.fromLTRB(28, 28, 28, 28 + _bottomCardHeight + 24);
   }
 
@@ -272,11 +276,11 @@ class _DriverActiveTripScreenState
       if (renderObject is! RenderBox) return;
 
       final measuredHeight = renderObject.size.height;
-      if ((measuredHeight - _bottomCardHeight).abs() < 1) return;
-
-      setState(() {
-        _bottomCardHeight = measuredHeight;
-      });
+      if ((measuredHeight - _bottomCardHeight).abs() > 1) {
+        setState(() {
+          _bottomCardHeight = measuredHeight;
+        });
+      }
     });
   }
 
@@ -290,9 +294,7 @@ class _DriverActiveTripScreenState
         last.latitude,
         last.longitude,
       );
-      if (distanceMeters < _minFitDistanceMeters) {
-        return null;
-      }
+      if (distanceMeters < _minFitDistanceMeters) return null;
 
       return CameraFit.bounds(
         bounds: LatLngBounds.fromPoints(_routePoints!),
@@ -306,9 +308,7 @@ class _DriverActiveTripScreenState
       _dropoffLocation.latitude,
       _dropoffLocation.longitude,
     );
-    if (fallbackDistanceMeters < _minFitDistanceMeters) {
-      return null;
-    }
+    if (fallbackDistanceMeters < _minFitDistanceMeters) return null;
 
     return CameraFit.bounds(
       bounds: LatLngBounds.fromPoints([_driverLocation, _dropoffLocation]),
@@ -317,7 +317,6 @@ class _DriverActiveTripScreenState
   }
 
   Future<void> _endTrip(BuildContext context) async {
-    // 1. Tell the backend the DRIVER has ended the trip
     await ref
         .read(tripControllerProvider.notifier)
         .completeRide(tripID: widget.tripID, isDriver: true);
@@ -360,24 +359,25 @@ class _DriverActiveTripScreenState
           );
           Navigator.pushAndRemoveUntil(
             context,
-            MaterialPageRoute(
-              builder: (context) =>
-                  const DriverHomeScreen(), // Make sure this matches your home screen's exact name
-            ),
-            (route) =>
-                false, // This "false" is what destroys the old route history
+            MaterialPageRoute(builder: (context) => const DriverHomeScreen()),
+            (route) => false, 
           );
         }
       }
     });
+
     final activeTripAsync = ref.watch(activeTripStreamProvider(widget.tripID));
     final trip = activeTripAsync.value;
-    _syncDropoffFromTrip(trip);
-    final commuterInfoAsync = ref.watch(
-      userInfoProvider(trip?.commuterID ?? ''),
-    );
+    
+    // 🔥 FIXED: Safely sync the dropoff info AFTER the build is finished to prevent crashes
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _syncDropoffFromTrip(trip);
+    });
+
+    final commuterInfoAsync = ref.watch(userInfoProvider(trip?.commuterID ?? ''));
     final commuterPhone = commuterInfoAsync.value?.phoneNo;
     final polylinePoints = _polylinePoints;
+    
     _measureBottomCardHeight();
 
     return Scaffold(
@@ -386,16 +386,18 @@ class _DriverActiveTripScreenState
         children: [
           Positioned.fill(
             child: FlutterMap(
-              key: ValueKey<String>(
-                '${_driverLocation.latitude.toStringAsFixed(5)}-${_driverLocation.longitude.toStringAsFixed(5)}-${polylinePoints.length}-${_bottomCardHeight.round()}',
-              ),
+              // 🔥 FIXED: Stable key prevents map destruction!
+              key: ValueKey<String>(widget.tripID),
+              mapController: _mapController,
               options: MapOptions(
                 initialCenter: _driverLocation,
                 initialZoom: 16.0,
                 initialCameraFit: _initialCameraFit(),
-                interactionOptions: const InteractionOptions(
-                  flags: InteractiveFlag.all,
-                ),
+                interactionOptions: const InteractionOptions(flags: InteractiveFlag.all),
+                // 🔥 FIXED: Unlocks camera tracking only after map exists
+                onMapReady: () {
+                  _isMapReady = true;
+                },
               ),
               children: [
                 TileLayer(
@@ -404,26 +406,10 @@ class _DriverActiveTripScreenState
                   tileBuilder: (context, tileWidget, tile) {
                     return ColorFiltered(
                       colorFilter: const ColorFilter.matrix([
-                        -0.2126,
-                        -0.7152,
-                        -0.0722,
-                        0,
-                        255,
-                        -0.2126,
-                        -0.7152,
-                        -0.0722,
-                        0,
-                        255,
-                        -0.2126,
-                        -0.7152,
-                        -0.0722,
-                        0,
-                        255,
-                        0,
-                        0,
-                        0,
-                        1,
-                        0,
+                        -0.2126, -0.7152, -0.0722, 0, 255,
+                        -0.2126, -0.7152, -0.0722, 0, 255,
+                        -0.2126, -0.7152, -0.0722, 0, 255,
+                        0,       0,       0,       1, 0,
                       ]),
                       child: tileWidget,
                     );
@@ -465,11 +451,7 @@ class _DriverActiveTripScreenState
                       point: _dropoffLocation,
                       width: 40,
                       height: 40,
-                      child: const Icon(
-                        Icons.location_on,
-                        color: Colors.redAccent,
-                        size: 40,
-                      ),
+                      child: const Icon(Icons.location_on, color: Colors.redAccent, size: 40),
                     ),
                   ],
                 ),
@@ -549,28 +531,18 @@ class _DriverActiveTripScreenState
                           children: [
                             Text(
                               trip?.endLocName ?? '---',
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 16,
-                              ),
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                             ),
                             const Text(
                               'IIT Kanpur Campus',
-                              style: TextStyle(
-                                color: Colors.grey,
-                                fontSize: 13,
-                              ),
+                              style: TextStyle(color: Colors.grey, fontSize: 13),
                             ),
                           ],
                         ),
                       ),
                     ],
                   ),
-                  const Divider(
-                    height: 32,
-                    thickness: 1,
-                    color: Colors.black12,
-                  ),
+                  const Divider(height: 32, thickness: 1, color: Colors.black12),
                   Row(
                     children: [
                       CircleAvatar(
@@ -581,32 +553,16 @@ class _DriverActiveTripScreenState
                       Expanded(
                         child: Text(
                           trip?.commuterName ?? '---',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: Colors.black,
-                            fontSize: 16,
-                          ),
+                          style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black, fontSize: 16),
                         ),
                       ),
                       IconButton(
-                        icon: Icon(
-                          Icons.phone_in_talk,
-                          color: Colors.grey[700],
-                        ),
-                        onPressed: () => ContactLauncherService.callNumber(
-                          context,
-                          commuterPhone,
-                        ),
+                        icon: Icon(Icons.phone_in_talk, color: Colors.grey[700]),
+                        onPressed: () => ContactLauncherService.callNumber(context, commuterPhone),
                       ),
                       IconButton(
-                        icon: Icon(
-                          Icons.chat_bubble_outline,
-                          color: Colors.grey[700],
-                        ),
-                        onPressed: () => ContactLauncherService.smsNumber(
-                          context,
-                          commuterPhone,
-                        ),
+                        icon: Icon(Icons.chat_bubble_outline, color: Colors.grey[700]),
+                        onPressed: () => ContactLauncherService.smsNumber(context, commuterPhone),
                       ),
                     ],
                   ),

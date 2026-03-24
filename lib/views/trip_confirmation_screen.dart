@@ -263,6 +263,8 @@ class _TripConfirmationScreenState extends ConsumerState<TripConfirmationScreen>
                         driverName: null,
                         driverID: null,
                         startLocName: widget.pickupLabel,
+                        startLatitude: widget.pickupPoint?.latitude,
+                        startLongitude: widget.pickupPoint?.longitude,
                         endLocName: widget.destination,
                         startTime: null,
                         status: TripStatus.pending, 

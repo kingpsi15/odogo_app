@@ -1,3 +1,5 @@
+import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
+
 plugins {
     id("com.android.application")
     // START: FlutterFire Configuration
@@ -50,9 +52,24 @@ flutter {
 // Workaround for intermittent AGP validation failures where
 // createDebugApkListingFileRedirect runs with missing output-metadata.json.
 afterEvaluate {
+    val debugMetadataFile =
+        layout.buildDirectory.file("outputs/apk/debug/output-metadata.json").get().asFile
+    if (!debugMetadataFile.exists()) {
+        debugMetadataFile.parentFile.mkdirs()
+        debugMetadataFile.writeText("{}")
+    }
+
     tasks.findByName("createDebugApkListingFileRedirect")?.apply {
         dependsOn("packageDebug")
         mustRunAfter("packageDebug")
+    }
+
+    tasks.withType<KotlinCompile>().configureEach {
+        if (name == "compileDebugKotlin") {
+            doFirst {
+                destinationDirectory.get().asFile.mkdirs()
+            }
+        }
     }
 }
 

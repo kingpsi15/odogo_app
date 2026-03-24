@@ -9,6 +9,8 @@ class TripModel {
   final String? driverName; // Nullable until a driver accepts
   final String? driverID; // Nullable until a driver accepts
   final String startLocName;
+  final double? startLatitude;
+  final double? startLongitude;
   final String endLocName;
   final DateTime? startTime;
   final Timestamp? eta;
@@ -25,6 +27,8 @@ class TripModel {
     this.driverName,
     this.driverID,
     required this.startLocName,
+    this.startLatitude,
+    this.startLongitude,
     required this.endLocName,
     required this.startTime,
     this.eta,
@@ -46,6 +50,8 @@ class TripModel {
       driverName: json['driverName'],
       driverID: json['driverID'],
       startLocName: json['startLoc'] ?? '',
+      startLatitude: (json['startLatitude'] as num?)?.toDouble(),
+      startLongitude: (json['startLongitude'] as num?)?.toDouble(),
       endLocName: json['endLoc'] ?? '',
       startTime: json['startTime'] != null ? (json['startTime'] as Timestamp).toDate() : null,
       eta: json['eta'] as Timestamp?,
@@ -65,6 +71,8 @@ class TripModel {
       if (driverName != null) 'driverName': driverName,
       if (driverID != null) 'driverID': driverID,
       'startLoc': startLocName,
+      if (startLatitude != null) 'startLatitude': startLatitude,
+      if (startLongitude != null) 'startLongitude': startLongitude,
       'endLoc': endLocName,
       if (startTime != null) 'startTime': Timestamp.fromDate(startTime!),
       if (eta != null) 'eta': eta,

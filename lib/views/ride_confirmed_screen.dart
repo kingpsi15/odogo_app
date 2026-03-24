@@ -11,11 +11,12 @@ import 'package:odogo_app/controllers/telemetry_controller.dart';
 import 'package:odogo_app/controllers/trip_controller.dart';
 import 'package:odogo_app/data/iitk_dropoff_locations.dart';
 import 'package:odogo_app/models/enums.dart';
+import 'package:odogo_app/models/trip_model.dart';
 import 'package:odogo_app/services/contact_launcher_service.dart';
 
 import 'commuter_cancel_confirmation_screen.dart';
 import 'pickup_confirmed_screen.dart';
-import 'waiting_for_driver_screen.dart'; // REQUIRED to route back
+import 'waiting_for_driver_screen.dart';
 
 class RideConfirmedScreen extends ConsumerStatefulWidget {
   final String tripID;
@@ -32,15 +33,20 @@ class _RideConfirmedScreenState extends ConsumerState<RideConfirmedScreen> {
   static const LatLng _fallbackCurrentLocation = LatLng(26.5123, 80.2329);
   static const LatLng _fallbackDriverLocation = LatLng(26.5150, 80.2300);
   static const LatLng _fallbackDropoffLocation = LatLng(26.5170, 80.2310);
-  static const double _avgDriverSpeedMetersPerSecond = 4.5; // ~16.2 km/h
+  static const double _avgDriverSpeedMetersPerSecond = 4.5; 
   static const double _minFitDistanceMeters = 5;
   static const double _destinationRefreshThresholdMeters = 5;
   static const double _driverUpdateThresholdMeters = 3;
+  
   LatLng _pickupLocation = _fallbackCurrentLocation;
   LatLng _driverLocation = _fallbackDriverLocation;
   List<LatLng>? _routePoints;
   bool _pickupResolvedFromTrip = false;
   late LatLng _dropoffLocation;
+
+  // 🔥 ADDED: MapController for active camera tracking
+  final MapController _mapController = MapController();
+  bool _isMapReady = false;
 
   @override
   void initState() {
@@ -61,19 +67,13 @@ class _RideConfirmedScreenState extends ConsumerState<RideConfirmedScreen> {
       permission = await Geolocator.requestPermission();
     }
 
-    if (!mounted) return;
-    if (permission == LocationPermission.denied ||
-        permission == LocationPermission.deniedForever) {
-      return;
-    }
+    if (!mounted || permission == LocationPermission.denied || permission == LocationPermission.deniedForever) return;
 
     final serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled || !mounted) return;
 
     try {
-      final position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
-      );
+      final position = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
       if (!mounted) return;
       setState(() {
         if (widget.pickupPoint == null) {
@@ -100,17 +100,14 @@ class _RideConfirmedScreenState extends ConsumerState<RideConfirmedScreen> {
       final routes = decoded['routes'];
       if (routes is! List || routes.isEmpty) return;
 
-      final firstRoute = routes.first as Map<String, dynamic>;
-      final geometry = firstRoute['geometry'] as Map<String, dynamic>?;
+      final geometry = routes.first['geometry'] as Map<String, dynamic>?;
       final coordinates = geometry?['coordinates'];
       if (coordinates is! List) return;
 
       final points = <LatLng>[];
       for (final item in coordinates) {
         if (item is List && item.length >= 2) {
-          final lon = (item[0] as num).toDouble();
-          final lat = (item[1] as num).toDouble();
-          points.add(LatLng(lat, lon));
+          points.add(LatLng((item[1] as num).toDouble(), (item[0] as num).toDouble()));
         }
       }
 
@@ -123,31 +120,13 @@ class _RideConfirmedScreenState extends ConsumerState<RideConfirmedScreen> {
 
   CameraFit? _initialCameraFit() {
     if (_routePoints != null && _routePoints!.length >= 2) {
-      final first = _routePoints!.first;
-      final last = _routePoints!.last;
-      final distanceMeters = Geolocator.distanceBetween(
-        first.latitude,
-        first.longitude,
-        last.latitude,
-        last.longitude,
-      );
-      if (distanceMeters < _minFitDistanceMeters) {
-        return null;
-      }
-
       return CameraFit.bounds(
         bounds: LatLngBounds.fromPoints(_routePoints!),
         padding: const EdgeInsets.all(32),
       );
     }
 
-    final fallbackDistanceMeters = Geolocator.distanceBetween(
-      _driverLocation.latitude,
-      _driverLocation.longitude,
-      _pickupLocation.latitude,
-      _pickupLocation.longitude,
-    );
-    if (fallbackDistanceMeters < _minFitDistanceMeters) {
+    if (Geolocator.distanceBetween(_driverLocation.latitude, _driverLocation.longitude, _pickupLocation.latitude, _pickupLocation.longitude) < _minFitDistanceMeters) {
       return null;
     }
 
@@ -159,47 +138,42 @@ class _RideConfirmedScreenState extends ConsumerState<RideConfirmedScreen> {
 
   List<LatLng> _polylinePoints() {
     if (_routePoints != null && _routePoints!.length >= 2) {
-      return _routePoints!;
+      // 🔥 FIXED: Blue line is now glued to the moving car
+      return [_driverLocation, ..._routePoints!];
     }
     return [_driverLocation, _pickupLocation];
   }
 
   int get _etaMinutesToPickup {
-    final distanceMeters = Geolocator.distanceBetween(
-      _driverLocation.latitude,
-      _driverLocation.longitude,
-      _pickupLocation.latitude,
-      _pickupLocation.longitude,
-    );
-
+    final distanceMeters = Geolocator.distanceBetween(_driverLocation.latitude, _driverLocation.longitude, _pickupLocation.latitude, _pickupLocation.longitude);
     final etaMinutes = (distanceMeters / _avgDriverSpeedMetersPerSecond / 60).ceil();
     return etaMinutes < 1 ? 1 : etaMinutes;
   }
 
   void _cancelTrip(BuildContext context) {
-    // This pushes to the COMMUTER cancel screen safely
     Navigator.push(
       context,
       MaterialPageRoute(builder: (context) => CommuterCancelConfirmationScreen(tripID: widget.tripID)),
     );
   }
 
-  void _syncPickupFromTripName(String? pickupName) {
-    if (pickupName == null || pickupName.isEmpty || _pickupResolvedFromTrip) {
-      return;
+  // 🔥 FIXED: Upgraded to use the new startLatitude/startLongitude from TripModel
+  void _syncPickupFromTrip(TripModel? trip) {
+    if (trip == null || _pickupResolvedFromTrip) return;
+
+    LatLng? nextPickup;
+    if (trip.startLatitude != null && trip.startLongitude != null) {
+      nextPickup = LatLng(trip.startLatitude!, trip.startLongitude!);
+    } else if (trip.startLocName.isNotEmpty) {
+      final mappedPickup = DropoffLocation.fromName(trip.startLocName);
+      if (mappedPickup != null) {
+        nextPickup = LatLng(mappedPickup.latitude, mappedPickup.longitude);
+      }
     }
 
-    final mappedPickup = DropoffLocation.fromName(pickupName);
-    if (mappedPickup == null) return;
+    if (nextPickup == null) return;
 
-    final nextPickup = LatLng(mappedPickup.latitude, mappedPickup.longitude);
-    final hasChanged = Geolocator.distanceBetween(
-          _pickupLocation.latitude,
-          _pickupLocation.longitude,
-          nextPickup.latitude,
-          nextPickup.longitude,
-        ) >
-        _destinationRefreshThresholdMeters;
+    final hasChanged = Geolocator.distanceBetween(_pickupLocation.latitude, _pickupLocation.longitude, nextPickup.latitude, nextPickup.longitude) > _destinationRefreshThresholdMeters;
 
     if (!hasChanged) {
       _pickupResolvedFromTrip = true;
@@ -207,41 +181,28 @@ class _RideConfirmedScreenState extends ConsumerState<RideConfirmedScreen> {
     }
 
     setState(() {
-      _pickupLocation = nextPickup;
+      _pickupLocation = nextPickup!;
       _routePoints = null;
       _pickupResolvedFromTrip = true;
     });
     _loadRoadRoute();
   }
 
-  void _syncDriverLocationFromTelemetry(double? lat, double? lng) {
-    if (lat == null || lng == null) return;
-    final nextLocation = LatLng(lat, lng);
-    final moved = Geolocator.distanceBetween(
-      _driverLocation.latitude,
-      _driverLocation.longitude,
-      nextLocation.latitude,
-      nextLocation.longitude,
-    );
-    if (moved < _driverUpdateThresholdMeters) return;
-
-    setState(() {
-      _driverLocation = nextLocation;
-      _routePoints = null;
-    });
-    _loadRoadRoute();
-  }
-
   @override
   Widget build(BuildContext context) {
-    ref.listen(activeTripStreamProvider(widget.tripID), (previous, next) {
-      final trip = next.value;
-      if (trip == null) return;
+    final activeTripAsync = ref.watch(activeTripStreamProvider(widget.tripID));
+    final trip = activeTripAsync.value;
 
-      // SCENARIO: DRIVER CANCELLED! (Status falls back to pending)
-      if (trip.status == TripStatus.pending) {
-        
-        // 1. Show the Commuter the message instantly
+    // 🔥 FIXED: Safely sync data after build phase
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _syncPickupFromTrip(trip);
+    });
+
+    ref.listen(activeTripStreamProvider(widget.tripID), (previous, next) {
+      final nextTrip = next.value;
+      if (nextTrip == null) return;
+
+      if (nextTrip.status == TripStatus.pending) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Driver cancelled the ride. Searching for a new driver...'),
@@ -249,11 +210,6 @@ class _RideConfirmedScreenState extends ConsumerState<RideConfirmedScreen> {
             duration: Duration(seconds: 4),
           ),
         );
-
-        // 2. THE NUCLEAR ROUTING FIX
-        // Wipe this screen and force the app to directly open the Waiting Screen.
-        // We pass 'wasDropped: true' to trigger the orange UI, and we pass the coordinates
-        // so they DO NOT have to enter them again.
         Navigator.pushAndRemoveUntil(
           context,
           MaterialPageRoute(
@@ -261,48 +217,63 @@ class _RideConfirmedScreenState extends ConsumerState<RideConfirmedScreen> {
               tripID: widget.tripID,
               dropoffPoint: widget.dropoffPoint,
               pickupPoint: widget.pickupPoint,
-              wasDropped: true, // Triggers the orange "Re-searching" UI
+              wasDropped: true, 
             ),
           ),
-          (route) => route.isFirst, // Keeps the bottom-most Commuter Map alive, kills everything else
+          (route) => route.isFirst, 
         );
-      }
-
-      // If driver starts the ride, proceed to the active trip screen
-      else if (trip.status == TripStatus.ongoing) { 
+      } else if (nextTrip.status == TripStatus.ongoing) { 
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (context) => PickupConfirmedScreen(tripID: widget.tripID, dropoffPoint: _dropoffLocation),),
+          MaterialPageRoute(builder: (context) => PickupConfirmedScreen(tripID: widget.tripID, dropoffPoint: _dropoffLocation)),
         );
       }
     });
 
-    final activeTripAsync = ref.watch(activeTripStreamProvider(widget.tripID));
-    final trip = activeTripAsync.value;
-    _syncPickupFromTripName(trip?.startLocName);
-    final driverTelemetryAsync = ref.watch(driverLocationProvider(trip?.driverID ?? ''));
-    _syncDriverLocationFromTelemetry(
-      driverTelemetryAsync.value?.latitude,
-      driverTelemetryAsync.value?.longitude,
-    );
-    final driverInfoAsync = ref.watch(userInfoProvider(trip?.driverID ?? ''));
+    // 🔥 FIXED: Safe RTDB Listener that controls camera and state properly
+    final driverID = trip?.driverID ?? '';
+    ref.listen(driverLocationProvider(driverID), (previous, next) {
+      final telemetry = next.value;
+      if (telemetry != null) {
+        final nextLocation = LatLng(telemetry.latitude, telemetry.longitude);
+        final moved = Geolocator.distanceBetween(_driverLocation.latitude, _driverLocation.longitude, nextLocation.latitude, nextLocation.longitude);
+        
+        if (moved >= _driverUpdateThresholdMeters) {
+          setState(() {
+            _driverLocation = nextLocation;
+          });
+          
+          if (_isMapReady) {
+            _mapController.move(nextLocation, _mapController.camera.zoom);
+          }
+          
+          _loadRoadRoute();
+        }
+      }
+    });
+
+    final driverInfoAsync = ref.watch(userInfoProvider(driverID));
     final driverPhone = driverInfoAsync.value?.phoneNo;
     final routePoints = _polylinePoints();
-    final mapKey = '${routePoints.length}-${_driverLocation.latitude.toStringAsFixed(5)}-${_driverLocation.longitude.toStringAsFixed(5)}';
 
     return Scaffold(
       backgroundColor: Colors.black,
       body: Stack(
         children: [
-          // 1. The Map
           Positioned.fill(
             child: FlutterMap(
-              key: ValueKey<String>(mapKey),
+              // 🔥 FIXED: Stable map key!
+              key: ValueKey<String>(widget.tripID),
+              mapController: _mapController,
               options: MapOptions(
                 initialCenter: _pickupLocation,
                 initialZoom: 16.0,
                 initialCameraFit: _initialCameraFit(),
                 interactionOptions: const InteractionOptions(flags: InteractiveFlag.all),
+                // 🔥 FIXED: Unlocks camera tracking safely
+                onMapReady: () {
+                  _isMapReady = true;
+                },
               ),
               children: [
                 TileLayer(
@@ -322,11 +293,7 @@ class _RideConfirmedScreenState extends ConsumerState<RideConfirmedScreen> {
                 ),
                 PolylineLayer(
                   polylines: [
-                    Polyline(
-                      points: routePoints,
-                      strokeWidth: 5,
-                      color: Colors.blue,
-                    ),
+                    Polyline(points: routePoints, strokeWidth: 5, color: Colors.blue),
                   ],
                 ),
                 MarkerLayer(
@@ -342,8 +309,7 @@ class _RideConfirmedScreenState extends ConsumerState<RideConfirmedScreen> {
                       child: Image.asset(
                         'assets/images/odogo_logo_without_bg.png',
                         fit: BoxFit.contain,
-                        errorBuilder: (context, error, stackTrace) =>
-                            const Icon(Icons.electric_rickshaw, color: Color(0xFF66D2A3), size: 40),
+                        errorBuilder: (context, error, stackTrace) => const Icon(Icons.electric_rickshaw, color: Color(0xFF66D2A3), size: 40),
                       ),
                     ),
                   ],
@@ -352,11 +318,8 @@ class _RideConfirmedScreenState extends ConsumerState<RideConfirmedScreen> {
             ),
           ),
           
-          // 2. Bottom Confirmation Card
           Positioned(
-            bottom: 0,
-            left: 0,
-            right: 0,
+            bottom: 0, left: 0, right: 0,
             child: Container(
               padding: const EdgeInsets.only(top: 16, left: 24, right: 24, bottom: 32),
               decoration: const BoxDecoration(
@@ -368,49 +331,22 @@ class _RideConfirmedScreenState extends ConsumerState<RideConfirmedScreen> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Center(
-                    child: Container(
-                      width: 50,
-                      height: 5,
-                      decoration: BoxDecoration(
-                        color: Colors.grey[300],
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                    ),
-                  ),
+                  Center(child: Container(width: 50, height: 5, decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(10)))),
                   const SizedBox(height: 24),
-                  
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text(
-                            'Your ride is confirmed',
-                            style: TextStyle(
-                              fontSize: 22,
-                              fontWeight: FontWeight.w900,
-                              color: Colors.black87,
-                            ),
-                          ),
+                          const Text('Your ride is confirmed', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: Colors.black87)),
                           const SizedBox(height: 4),
-                          Text(
-                            'Meet at the pickup point',
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: Colors.grey[600],
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
+                          Text('Meet at the pickup point', style: TextStyle(fontSize: 14, color: Colors.grey[600], fontWeight: FontWeight.w500)),
                         ],
                       ),
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: Colors.black,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
+                        decoration: BoxDecoration(color: Colors.black, borderRadius: BorderRadius.circular(12)),
                         child: Column(
                           children: [
                             Text('$_etaMinutesToPickup', style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
@@ -420,92 +356,44 @@ class _RideConfirmedScreenState extends ConsumerState<RideConfirmedScreen> {
                       ),
                     ],
                   ),
-                  
                   const SizedBox(height: 24),
-                  
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-                    decoration: BoxDecoration(
-                      color: Colors.grey[100],
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: Colors.grey.shade300),
-                    ),
+                    decoration: BoxDecoration(color: Colors.grey[100], borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.grey.shade300)),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(
-                          'PIN for this trip',
-                          style: TextStyle(color: Colors.grey[800], fontSize: 16, fontWeight: FontWeight.bold),
-                        ),
-                        Text(
-                          trip?.ridePIN ?? '----',
-                          style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w900, letterSpacing: 6, color: Colors.black),
-                        ),
+                        Text('PIN for this trip', style: TextStyle(color: Colors.grey[800], fontSize: 16, fontWeight: FontWeight.bold)),
+                        Text(trip?.ridePIN ?? '----', style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w900, letterSpacing: 6, color: Colors.black)),
                       ],
                     ),
                   ),
-                  
                   const SizedBox(height: 24),
-                  
                   Row(
                     children: [
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF66D2A3).withOpacity(0.2),
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: const Icon(Icons.person, size: 36, color: Color(0xFF66D2A3)),
-                      ),
+                      Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: const Color(0xFF66D2A3).withOpacity(0.2), borderRadius: BorderRadius.circular(16)), child: const Icon(Icons.person, size: 36, color: Color(0xFF66D2A3))),
                       const SizedBox(width: 16),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              trip?.driverName ?? '----',
-                              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87),
-                            ),
-                            const Text(
-                              'Your Driver',
-                              style: TextStyle(color: Colors.grey, fontSize: 12, fontWeight: FontWeight.w600),
-                            ),
+                            Text(trip?.driverName ?? '----', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87)),
+                            const Text('Your Driver', style: TextStyle(color: Colors.grey, fontSize: 12, fontWeight: FontWeight.w600)),
                           ],
                         ),
                       ),
-                      Container(
-                        decoration: BoxDecoration(color: Colors.grey[100], shape: BoxShape.circle),
-                        child: IconButton(
-                          onPressed: () => ContactLauncherService.callNumber(context, driverPhone),
-                          icon: const Icon(Icons.phone_in_talk, color: Colors.black87),
-                        ),
-                      ),
+                      Container(decoration: BoxDecoration(color: Colors.grey[100], shape: BoxShape.circle), child: IconButton(onPressed: () => ContactLauncherService.callNumber(context, driverPhone), icon: const Icon(Icons.phone_in_talk, color: Colors.black87))),
                       const SizedBox(width: 8),
-                      Container(
-                        decoration: BoxDecoration(color: Colors.grey[100], shape: BoxShape.circle),
-                        child: IconButton(
-                          onPressed: () => ContactLauncherService.smsNumber(context, driverPhone),
-                          icon: const Icon(Icons.message_rounded, color: Colors.black87),
-                        ),
-                      ),
+                      Container(decoration: BoxDecoration(color: Colors.grey[100], shape: BoxShape.circle), child: IconButton(onPressed: () => ContactLauncherService.smsNumber(context, driverPhone), icon: const Icon(Icons.message_rounded, color: Colors.black87))),
                     ],
                   ),
-                  
                   const SizedBox(height: 32),
-                  
                   SizedBox(
                     width: double.infinity,
                     child: OutlinedButton(
-                      style: OutlinedButton.styleFrom(
-                        side: const BorderSide(color: Colors.red, width: 2),
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      ),
+                      style: OutlinedButton.styleFrom(side: const BorderSide(color: Colors.red, width: 2), padding: const EdgeInsets.symmetric(vertical: 16), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
                       onPressed: () => _cancelTrip(context),
-                      child: const Text(
-                        'Cancel Trip',
-                        style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 16),
-                      ),
+                      child: const Text('Cancel Trip', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 16)),
                     ),
                   ),
                 ],

@@ -282,10 +282,6 @@ class _PickupConfirmedScreenState extends ConsumerState<PickupConfirmedScreen> {
     return distanceMeters >= _minRouteLineDistanceMeters;
   }
 
-  void _cancelRide() {
-    Navigator.pop(context);
-  }
-
   @override
   void dispose() {
     _userLocationSubscription?.cancel();
@@ -429,7 +425,6 @@ class _PickupConfirmedScreenState extends ConsumerState<PickupConfirmedScreen> {
           //     ),
           //   ),
           // ),
-
           Positioned(
             bottom: 24,
             left: 20,

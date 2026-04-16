@@ -3,7 +3,7 @@ OdoGo: Campus Ride-Sharing Application
 
 ![OdoGo Hero Image](/assets/images/odogo_app_logo.png)
 
-This full-stack Android application is made as a course project of [CS253](https://www.cse.iitk.ac.in/users/isaha/Courses/sdo25.shtml/): Software Development and Operations in Spring 2026 under the guidance of [Prof. Indranil Saha](https://www.cse.iitk.ac.in/users/isaha/). This full-stack Flutter application was built to solve intra-campus mobility issues (specifically targeting the IITK campus environment). OdoGo is an integrated ride-sharing platform connecting two distinct user categories within a single application: **Commuters** and **Drivers**.
+This full-stack Android application is made as a course project of [CS253](https://www.cse.iitk.ac.in/users/isaha/Courses/sdo26.shtml/): Software Development and Operations in Spring 2026 under the guidance of [Prof. Indranil Saha](https://www.cse.iitk.ac.in/users/isaha/). This full-stack Flutter application was built to solve intra-campus mobility issues (specifically targeting the IITK campus environment). OdoGo is an integrated ride-sharing platform connecting two distinct user categories within a single application: **Commuters** and **Drivers**.
 
 The platform simplifies booking immediate rides, scheduling future trips, and tracking real-time locations using custom map integrations.
 
@@ -137,7 +137,7 @@ lib/
 * **Software Implementation Document (SID):**  [Link to SID Document](docs/Implementation%20Document.pdf)
 * **Software Test Document:**  [Link to Test Document](docs/Testing%20Document.pdf)
 * **Software User Manual:** [Link to User Manual](docs/User%20Manual.pdf)
-* **Final Presentation:** TBA <!--[Link to Presentation Deck](#)-->
+* **Final Presentation:** [Link to Final Presentation](docs/Final%20Presentation.pdf)
 
 ---
 
